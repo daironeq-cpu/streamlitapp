@@ -8,7 +8,7 @@ def pma():
 
     st.set_page_config(page_title="PMA SPCS", layout="wide")
     
-    con = sqlite3.connect("banco_d_pma\\dados_pmas.db")
+    con = sqlite3.connect("banco_d_pma/dados_pmas.db")
 
     cursor = con.cursor()
 
