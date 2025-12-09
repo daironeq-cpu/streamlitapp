@@ -5,7 +5,9 @@ import streamlit as st
 import pydeck as pdk
 import os
 
-pdk.settings.mapbox_api_key = os.environ["MAPBOX_API_KEY"]
+#pdk.settings.mapbox_api_key = os.environ["MAPBOX_API_KEY"]
+MAPBOX_API_KEY = st.secrets["MAPBOX_API_KEY"]
+pdk.settings.mapbox_api_key = MAPBOX_API_KEY
 
 st.set_page_config(page_title="SISTEMA AT EMT", layout="wide")
 
@@ -205,6 +207,7 @@ deck = pdk.Deck(
     initial_view_state=view_state,
     map_provider=estilo_mapa[select_map][0],
     map_style=estilo_mapa[select_map][1],
+    api_keys={"mapbox": MAPBOX_API_KEY},
     tooltip={"text": "{tooltip}"}
 )
 
