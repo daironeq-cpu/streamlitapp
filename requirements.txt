@@ -1,8 +1,6 @@
 streamlit
 pandas
 plotly
-sqlite3
 geopandas
 shapely
 pydeck
-os
