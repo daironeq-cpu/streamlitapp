@@ -166,7 +166,7 @@ fig = px.scatter_mapbox(
     color_continuous_scale="rainbow",
     size_max=40,
     zoom=5,
-    height=800,
+    height=600,
     labels={"tot_ano": "Total CAPEX (R$)", "subest": "Subestação", "num_projeto": "nº SIGCO", "ano_energiz": "Ano de Energização"},
     hover_data={
     "num_projeto": True,
@@ -257,4 +257,5 @@ st.plotly_chart(
     fig_graph,
     use_container_width=True,
     config={"scrollZoom": True, "displaylogo": False}
+
 )
