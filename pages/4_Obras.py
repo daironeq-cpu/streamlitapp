@@ -129,7 +129,7 @@ fig = px.scatter_mapbox(
 
 # Define o estilo do mapa
 fig.update_layout(
-    mapbox_style="mapbox://styles/mapbox/navigation-night-v1",
+    mapbox_style="mapbox://styles/mapbox/satellite-streets-v12",
     margin={"r":0,"t":0,"l":0,"b":0}
 )
 
@@ -141,3 +141,4 @@ st.plotly_chart(
     use_container_width=True,
     config={"scrollZoom": True}
 )
+
