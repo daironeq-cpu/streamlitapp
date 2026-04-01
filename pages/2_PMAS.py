@@ -117,7 +117,7 @@ else:
 
 list_lot_cc = sorted(set(list(df.loc[df["num_projeto_sigco"].isin(box1), "codarea_pma"])))
 
-box_cc = st.sidebar.multiselect("Selecionar Centro de Custo", list_lot_cc, default=[150600000, 193203000])
+box_cc = st.sidebar.multiselect("Selecionar Centro de Custo", list_lot_cc, default=list_lot_cc)
 
 
 list_lot2 = sorted(set(list(df.loc[df["num_projeto_sigco"].isin(box1) & df["codarea_pma"].isin(box_cc), "dscapc_pma"])))
