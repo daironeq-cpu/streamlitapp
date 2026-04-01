@@ -83,6 +83,7 @@ df["status"] = df["status"].map(subst)
 
 #criar coluna no dataframe com status do PMA (PMA ou OCM)
 df["status_p_o"] = df["numocm_pma_mat"]
+df["status_p_o"] = df["status_p_o"].astype("string")
 df.loc[df["status_p_o"].notna(), "status_p_o"] = "OCM"
 df.loc[df["status_p_o"].isna(), "status_p_o"] = "PMA"
 
