@@ -150,8 +150,8 @@ if "layers" not in st.session_state:
         "ScatterplotLayer",
         data=gdf_pont,                               # pode ser GeoDataFrame direto
         get_position='[longitude, latitude]',   # usa as colunas que você criou
-        get_radius=10,
-        radius_min_pixels=2,                         # metros (se usar 'meters' como units)
+        get_radius=2,
+        radius_min_pixels=1,                         # metros (se usar 'meters' como units)
         radius_units="pixels",                  # ou "meters"
         get_color='[255, 80, 0, 180]',
         pickable=True,
