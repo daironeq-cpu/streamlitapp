@@ -18,6 +18,8 @@ COLS_PONT_CASCATA = ["TIP_PN", "MAT", "ALT", "ESF"]
 
 
 def extract_coords(geom):
+    if geom is None or geom.is_empty:
+        return None
     if geom.geom_type == "LineString":
         return list(geom.coords)
     elif geom.geom_type == "Polygon":
@@ -52,12 +54,24 @@ def preparar_dados(path_se, path_ldat, path_est, path_pont):
     gdf_est = gpd.read_file(path_est).to_crs(epsg=4326)
     gdf_pont = gpd.read_file(path_pont).to_crs(epsg=4326)
 
+    # remove geometrias nulas/vazias (fonte dos NaN que derrubam o deck.gl)
+    gdf_se = gdf_se[gdf_se.geometry.notna() & ~gdf_se.geometry.is_empty].copy()
+    gdf_ldat = gdf_ldat[gdf_ldat.geometry.notna() & ~gdf_ldat.geometry.is_empty].copy()
+    gdf_est = gdf_est[gdf_est.geometry.notna() & ~gdf_est.geometry.is_empty].copy()
+    gdf_pont = gdf_pont[gdf_pont.geometry.notna() & ~gdf_pont.geometry.is_empty].copy()
+
     gdf_se["coords"] = gdf_se.geometry.apply(extract_coords)
     gdf_ldat["coords"] = gdf_ldat.geometry.apply(extract_coords)
     gdf_est["coords"] = gdf_est.geometry.apply(extract_coords)
 
+    # descarta o que não virou coords válido
+    gdf_se = gdf_se[gdf_se["coords"].notna()].copy()
+    gdf_ldat = gdf_ldat[gdf_ldat["coords"].notna()].copy()
+    gdf_est = gdf_est[gdf_est["coords"].notna()].copy()
+
     gdf_pont["longitude"] = gdf_pont.geometry.x
     gdf_pont["latitude"] = gdf_pont.geometry.y
+    gdf_pont = gdf_pont.dropna(subset=["longitude", "latitude"]).copy()
 
     gdf_se["__layer__"]   = "Subestação"
     gdf_ldat["__layer__"] = "Linha de Distribuição de Alta Tensão(LDAT)"
@@ -136,7 +150,7 @@ select_map = st.sidebar.selectbox("Estilo de mapa", [
 st.markdown("### 🗺️ **Sistema de Alta Tensão - Energisa Mato Grosso**\n")
 st.markdown("###### ⚙️ *BASE DE DADOS GEOGRÁFICA DA DISTRIBUIDORA – BDGD*\n")
 
-# ------------------- FILTRO EM CASCATA (próximo ao mapa) -------------------
+# ------------------- FILTRO EM CASCATA -------------------
 c1, c2, c3 = st.columns(3)
 with c1:
     sel_se = st.multiselect("SE de origem", opcoes(df_ldat, COL_SE_ORIGEM))
@@ -170,10 +184,11 @@ with c6:
     sel_esf = st.multiselect("Esforço", opcoes(df_pont_4, "ESF"))
 df_pont_5 = aplicar(df_pont_4, "ESF", sel_esf)
 
+# dados finais saneados (sem NaN de coordenada)
 df_ldat_r = df_ldat_2[["coords", "tooltip"]]
-df_pont_r = df_pont_5[["longitude", "latitude", "tooltip"]]
+df_pont_r = df_pont_5[["longitude", "latitude", "tooltip"]].dropna(subset=["longitude", "latitude"])
 
-# ------------------- CAMADAS (sempre visíveis; filtros controlam o conteúdo) -------------------
+# ------------------- CAMADAS -------------------
 layers = [
     pdk.Layer(
         "PolygonLayer", data=df_se, get_polygon="coords",
@@ -187,17 +202,21 @@ layers = [
         get_line_width=1, line_width_units="pixels", line_width_min_pixels=1, line_width_max_pixels=2,
         stroked=True, filled=False, pickable=True, extruded=False, visible=True
     ),
-    pdk.Layer(
+]
+
+if not df_ldat_r.empty:
+    layers.append(pdk.Layer(
         "PathLayer", data=df_ldat_r, get_path="coords", get_color=[0, 90, 255, 220],
         get_width=1, width_units="pixels", width_min_pixels=1, width_max_pixels=2,
         pickable=True, auto_highlight=True, visible=True
-    ),
-    pdk.Layer(
+    ))
+
+if not df_pont_r.empty:
+    layers.append(pdk.Layer(
         "ScatterplotLayer", data=df_pont_r, get_position='[longitude, latitude]',
         get_radius=2, radius_min_pixels=1, radius_max_pixels=4, radius_units="pixels",
         get_color='[255, 80, 0, 180]', pickable=True, auto_highlight=True, visible=True
-    ),
-]
+    ))
 
 minx, miny, maxx, maxy = bounds
 view_state = pdk.ViewState(latitude=(miny + maxy) / 2, longitude=(minx + maxx) / 2, zoom=7)
@@ -220,4 +239,10 @@ deck = pdk.Deck(
     tooltip={"text": "{tooltip}"}
 )
 
-st.pydeck_chart(deck)
+try:
+    st.pydeck_chart(deck)
+except Exception as e:
+    st.error(f"Não foi possível renderizar o mapa: {e}")
+
+if df_ldat_r.empty and df_pont_r.empty:
+    st.info("Nenhuma LDAT/estrutura corresponde aos filtros selecionados.")
