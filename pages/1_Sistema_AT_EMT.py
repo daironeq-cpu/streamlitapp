@@ -9,10 +9,12 @@ pdk.settings.mapbox_api_key = os.environ["MAPBOX_API_KEY"]
 
 st.set_page_config(page_title="SISTEMA AT EMT", layout="wide")
 
-# Colunas do vínculo estrutura<->LDAT (ajuste se necessário)
-COL_LDAT_NOME = "CT_COD_OP"
-COLS_CONEXAO_LDAT = ["PN_CON_1", "PN_CON_2"]
-COL_ID_PONT = "COD_ID"
+# Colunas usadas nos filtros (ajuste se necessário)
+COL_SE_ORIGEM = "DESCR"                          # SE de origem (na LDAT)
+COL_LDAT_NOME = "CT_COD_OP"                       # Nome da LDAT
+COLS_CONEXAO_LDAT = ["PN_CON_1", "PN_CON_2"]      # ligam a LDAT ao COD_ID da estrutura
+COL_ID_PONT = "COD_ID"                            # id da estrutura
+COLS_PONT_CASCATA = ["TIP_PN", "MAT", "ALT", "ESF"]  # cascata nas estruturas
 
 
 def extract_coords(geom):
@@ -25,6 +27,22 @@ def extract_coords(geom):
 
 def txt(series):
     return series.fillna("—").astype(str)
+
+
+def opcoes(df, col):
+    if col not in df.columns:
+        return []
+    s = df[col].dropna()
+    try:
+        return [str(v) for v in sorted(s.unique())]
+    except TypeError:
+        return sorted(s.astype(str).unique())
+
+
+def aplicar(df, col, sel):
+    if sel and col in df.columns:
+        return df[df[col].astype(str).isin(sel)]
+    return df
 
 
 @st.cache_data(show_spinner="Carregando e preparando dados...")
@@ -87,54 +105,80 @@ def preparar_dados(path_se, path_ldat, path_est, path_pont):
         "\nSituação contábil: " + txt(gdf_pont["SITCONT"])
     ).fillna("Sem dados")
 
-    # bounds antes de descartar a geometria
     b_se, b_ldat, b_est = gdf_se.total_bounds, gdf_ldat.total_bounds, gdf_est.total_bounds
     minx = min(b_se[0], b_ldat[0], b_est[0]); miny = min(b_se[1], b_ldat[1], b_est[1])
     maxx = max(b_se[2], b_ldat[2], b_est[2]); maxy = max(b_se[3], b_ldat[3], b_est[3])
     bounds = (minx, miny, maxx, maxy)
 
-    # DataFrames "magros": só as colunas usadas na renderização/filtro
     df_se  = pd.DataFrame(gdf_se[["coords", "tooltip"]])
     df_est = pd.DataFrame(gdf_est[["coords", "tooltip"]])
-    keep_ldat = ["coords", "tooltip"] + [c for c in ([COL_LDAT_NOME] + COLS_CONEXAO_LDAT) if c in gdf_ldat.columns]
+
+    keep_ldat = ["coords", "tooltip"] + [c for c in ([COL_LDAT_NOME, COL_SE_ORIGEM] + COLS_CONEXAO_LDAT) if c in gdf_ldat.columns]
     df_ldat = pd.DataFrame(gdf_ldat[keep_ldat])
-    df_pont = pd.DataFrame(gdf_pont[["longitude", "latitude", "tooltip", COL_ID_PONT]])
 
-    nomes_ldat = sorted(df_ldat[COL_LDAT_NOME].dropna().astype(str).unique()) if COL_LDAT_NOME in df_ldat else []
+    keep_pont = ["longitude", "latitude", "tooltip", COL_ID_PONT] + [c for c in COLS_PONT_CASCATA if c in gdf_pont.columns]
+    df_pont = pd.DataFrame(gdf_pont[keep_pont])
 
-    return df_se, df_ldat, df_est, df_pont, bounds, nomes_ldat
+    return df_se, df_ldat, df_est, df_pont, bounds
 
 
-df_se, df_ldat, df_est, df_pont, bounds, nomes_ldat = preparar_dados(
+df_se, df_ldat, df_est, df_pont, bounds = preparar_dados(
     "SUB.shp", "SSDAT1.shp", "ARAT.shp", "PONNOT.shp"
 )
 
-# ------------------- FILTROS -------------------
-st.sidebar.markdown("### Filtros")
-sel_ldat = st.sidebar.multiselect("LDAT (Nome)", nomes_ldat, default=[])
-
-if sel_ldat:
-    df_ldat_f = df_ldat[df_ldat[COL_LDAT_NOME].astype(str).isin(sel_ldat)]
-    cols_ok = [c for c in COLS_CONEXAO_LDAT if c in df_ldat_f.columns]
-    if cols_ok:
-        ids_estruturas = pd.unique(df_ldat_f[cols_ok].astype(str).values.ravel())
-        df_pont_f = df_pont[df_pont[COL_ID_PONT].astype(str).isin(ids_estruturas)]
-    else:
-        st.sidebar.warning(f"Colunas de conexão {COLS_CONEXAO_LDAT} não encontradas; mostrando todas as estruturas.")
-        df_pont_f = df_pont
-else:
-    df_ldat_f = df_ldat
-    df_pont_f = df_pont
-
-# trim final: só o necessário para o navegador renderizar
-df_ldat_r = df_ldat_f[["coords", "tooltip"]]
-df_pont_r = df_pont_f[["longitude", "latitude", "tooltip"]]
-# -----------------------------------------------
-
+# ------------------- CONTROLES (barra lateral) -------------------
 tg_ldat = st.sidebar.toggle("Traçado LDAT", value=False)
 tg_estrut = st.sidebar.toggle("Estruturas", value=False)
 tg_se = st.sidebar.toggle("Subestações", value=False)
+select_map = st.sidebar.selectbox("Estilo de mapa", [
+    "Dark_C", "Satellite_Streets", "Streets", "Outdoors",
+    "Dark_M", "Light", "Satellite", "Navigation_Day", "Navigation_Night"
+], index=1)
 
+# ------------------- CABEÇALHO -------------------
+st.markdown("### 🗺️ **Sistema de Alta Tensão - Energisa Mato Grosso**\n")
+st.markdown("###### ⚙️ *BASE DE DADOS GEOGRÁFICA DA DISTRIBUIDORA – BDGD*\n")
+
+# ------------------- FILTRO EM CASCATA (próximo ao mapa) -------------------
+c1, c2, c3 = st.columns(3)
+with c1:
+    sel_se = st.multiselect("SE de origem", opcoes(df_ldat, COL_SE_ORIGEM))
+df_ldat_1 = aplicar(df_ldat, COL_SE_ORIGEM, sel_se)
+
+with c2:
+    sel_ldat = st.multiselect("Nome da LDAT", opcoes(df_ldat_1, COL_LDAT_NOME))
+df_ldat_2 = aplicar(df_ldat_1, COL_LDAT_NOME, sel_ldat)
+
+# estruturas vinculadas às LDAT já filtradas
+cols_ok = [c for c in COLS_CONEXAO_LDAT if c in df_ldat_2.columns]
+if cols_ok:
+    ids_estruturas = pd.unique(df_ldat_2[cols_ok].astype(str).values.ravel())
+    df_pont_1 = df_pont[df_pont[COL_ID_PONT].astype(str).isin(ids_estruturas)]
+else:
+    df_pont_1 = df_pont
+
+with c3:
+    sel_tip = st.multiselect("TIP_PN", opcoes(df_pont_1, "TIP_PN"))
+df_pont_2 = aplicar(df_pont_1, "TIP_PN", sel_tip)
+
+c4, c5, c6 = st.columns(3)
+with c4:
+    sel_mat = st.multiselect("Material", opcoes(df_pont_2, "MAT"))
+df_pont_3 = aplicar(df_pont_2, "MAT", sel_mat)
+
+with c5:
+    sel_alt = st.multiselect("Altura", opcoes(df_pont_3, "ALT"))
+df_pont_4 = aplicar(df_pont_3, "ALT", sel_alt)
+
+with c6:
+    sel_esf = st.multiselect("Esforço", opcoes(df_pont_4, "ESF"))
+df_pont_5 = aplicar(df_pont_4, "ESF", sel_esf)
+
+# dados finais para renderizar
+df_ldat_r = df_ldat_2[["coords", "tooltip"]]
+df_pont_r = df_pont_5[["longitude", "latitude", "tooltip"]]
+
+# ------------------- CAMADAS -------------------
 layers = [
     pdk.Layer(
         "PolygonLayer", data=df_se, get_polygon="coords",
@@ -172,11 +216,6 @@ estilo_mapa = {"Dark_C": ["carto", "dark"],
                "Satellite": ["mapbox", "mapbox://styles/mapbox/satellite-v9"],
                "Navigation_Day": ["mapbox", "mapbox://styles/mapbox/navigation-day-v1"],
                "Navigation_Night": ["mapbox", "mapbox://styles/mapbox/navigation-night-v1"]}
-
-select_map = st.sidebar.selectbox("Estilo de mapa", estilo_mapa.keys(), index=1)
-
-st.markdown("### 🗺️ **Sistema de Alta Tensão - Energisa Mato Grosso**\n")
-st.markdown("###### ⚙️ *BASE DE DADOS GEOGRÁFICA DA DISTRIBUIDORA – BDGD*\n")
 
 deck = pdk.Deck(
     layers=layers,
