@@ -17,6 +17,7 @@ COLS_CONEXAO_LDAT = ["PN_CON_1", "PN_CON_2"]
 COL_ID_PONT = "COD_ID"
 COL_COMP = "COMP"                          # comprimento do vão (m) na LDAT
 COL_TIPO_CABO = "BIT_FAS_1"               # tipo de cabo: BIT_FAS_1 | MAT_FAS_1 | GEOM_CAB
+COL_TENSAO = "TEN_NOM"                     # tensão nominal na LDAT
 
 # Material do poste e município: "auto" detecta; ou informe o nome exato da coluna
 COL_MATERIAL = "auto"
@@ -196,7 +197,7 @@ def preparar_dados(path_se, path_ldat, path_est, path_pont):
     df_se  = pd.DataFrame(gdf_se[["coords", "tooltip"]])
     df_est = pd.DataFrame(gdf_est[["coords", "tooltip"]])
 
-    keep_ldat = ["coords", "tooltip"] + [c for c in ([COL_LDAT_NOME, COL_SE_ORIGEM, COL_COMP, COL_TIPO_CABO] + COLS_CONEXAO_LDAT) if c in gdf_ldat.columns]
+    keep_ldat = ["coords", "tooltip"] + [c for c in ([COL_LDAT_NOME, COL_SE_ORIGEM, COL_COMP, COL_TIPO_CABO, COL_TENSAO] + COLS_CONEXAO_LDAT) if c in gdf_ldat.columns]
     df_ldat = pd.DataFrame(gdf_ldat[keep_ldat])
 
     keep_pont = ["longitude", "latitude", "tooltip", COL_ID_PONT] + [c for c in ["ALT", "ESF", "MATERIAL_BI", "MUN_BI"] if c in gdf_pont.columns]
@@ -325,9 +326,13 @@ g3, g4 = st.columns(2)
 with g3:
     grafico_extensao(df_ldat_2, COL_TIPO_CABO, COL_COMP, "Extensão por Tipo de Cabo (km)")
 with g4:
-    grafico_contagem(df_pont_f, "MATERIAL_BI", "Estruturas por Material")
+    grafico_extensao(df_ldat_2, COL_TENSAO, COL_COMP, "Extensão por Tensão Nominal (km)")
 
-grafico_contagem(df_pont_f, "MUN_BI", "Estruturas por Município", top_n=20)
+g5, g6 = st.columns(2)
+with g5:
+    grafico_contagem(df_pont_f, "MATERIAL_BI", "Estruturas por Material")
+with g6:
+    grafico_contagem(df_pont_f, "MUN_BI", "Estruturas por Município", top_n=20)
 
 # ------------------- DIAGNÓSTICO (para acertar as colunas) -------------------
 with st.expander("🔧 Diagnóstico de colunas (estruturas)"):
