@@ -2,6 +2,7 @@ import geopandas as gpd
 import pandas as pd
 import streamlit as st
 import pydeck as pdk
+import plotly.express as px
 import os
 
 pdk.settings.mapbox_api_key = os.environ["MAPBOX_API_KEY"]
@@ -9,11 +10,13 @@ pdk.settings.mapbox_api_key = os.environ["MAPBOX_API_KEY"]
 
 st.set_page_config(page_title="SISTEMA AT EMT", layout="wide")
 
-# Colunas usadas nos filtros (ajuste se necessário)
+# Colunas usadas nos filtros/BI (ajuste se necessário)
 COL_SE_ORIGEM = "DESCR"
 COL_LDAT_NOME = "CT_COD_OP"
 COLS_CONEXAO_LDAT = ["PN_CON_1", "PN_CON_2"]
 COL_ID_PONT = "COD_ID"
+COL_COMP = "COMP"                              # comprimento do vão (m) na LDAT
+COLS_PONT_BI = ["TIP_PN", "MAT", "ALT", "ESF", "MUN"]  # atributos para os gráficos
 
 
 def extract_coords(geom):
@@ -44,6 +47,25 @@ def aplicar(df, col, sel):
     if sel and col in df.columns:
         return df[df[col].astype(str).isin(sel)]
     return df
+
+
+def grafico_contagem(df, col, titulo):
+    """Barra com a contagem de estruturas por valor de `col`."""
+    if col not in df.columns or df.empty or df[col].dropna().empty:
+        st.info(f"Sem dados para: {titulo}")
+        return
+    cont = df[col].dropna().value_counts().reset_index()
+    cont.columns = [col, "Quantidade"]
+    try:  # ordena numericamente quando possível (altura/esforço)
+        cont["_ord"] = pd.to_numeric(cont[col])
+        cont = cont.sort_values("_ord").drop(columns="_ord")
+    except (ValueError, TypeError):
+        cont = cont.sort_values("Quantidade", ascending=False)
+    cont[col] = cont[col].astype(str)
+    fig = px.bar(cont, x=col, y="Quantidade", title=titulo, text="Quantidade")
+    fig.update_traces(textposition="outside")
+    fig.update_layout(margin=dict(l=10, r=10, t=45, b=10), height=340, xaxis_title="", yaxis_title="")
+    st.plotly_chart(fig, use_container_width=True)
 
 
 @st.cache_data(show_spinner="Carregando e preparando dados...")
@@ -124,10 +146,11 @@ def preparar_dados(path_se, path_ldat, path_est, path_pont):
     df_se  = pd.DataFrame(gdf_se[["coords", "tooltip"]])
     df_est = pd.DataFrame(gdf_est[["coords", "tooltip"]])
 
-    keep_ldat = ["coords", "tooltip"] + [c for c in ([COL_LDAT_NOME, COL_SE_ORIGEM] + COLS_CONEXAO_LDAT) if c in gdf_ldat.columns]
+    keep_ldat = ["coords", "tooltip"] + [c for c in ([COL_LDAT_NOME, COL_SE_ORIGEM, COL_COMP] + COLS_CONEXAO_LDAT) if c in gdf_ldat.columns]
     df_ldat = pd.DataFrame(gdf_ldat[keep_ldat])
 
-    df_pont = pd.DataFrame(gdf_pont[["longitude", "latitude", "tooltip", COL_ID_PONT]])
+    keep_pont = ["longitude", "latitude", "tooltip", COL_ID_PONT] + [c for c in COLS_PONT_BI if c in gdf_pont.columns]
+    df_pont = pd.DataFrame(gdf_pont[keep_pont])
 
     return df_se, df_ldat, df_est, df_pont, bounds
 
@@ -156,7 +179,6 @@ with c2:
     sel_ldat = st.multiselect("Nome da LDAT", opcoes(df_ldat_1, COL_LDAT_NOME))
 df_ldat_2 = aplicar(df_ldat_1, COL_LDAT_NOME, sel_ldat)
 
-# estruturas vinculadas às LDAT filtradas
 cols_ok = [c for c in COLS_CONEXAO_LDAT if c in df_ldat_2.columns]
 if cols_ok:
     ids_estruturas = pd.unique(df_ldat_2[cols_ok].astype(str).values.ravel())
@@ -222,6 +244,40 @@ try:
     st.pydeck_chart(deck)
 except Exception as e:
     st.error(f"Não foi possível renderizar o mapa: {e}")
+
+# ------------------- PAINEL B.I. (reflete os filtros) -------------------
+st.divider()
+st.markdown("## 📊 Painel (B.I.)")
+
+# KPIs
+qtd_estruturas = len(df_pont_f)
+qtd_ldat = df_ldat_2[COL_LDAT_NOME].nunique() if COL_LDAT_NOME in df_ldat_2.columns else len(df_ldat_2)
+qtd_se = df_ldat_2[COL_SE_ORIGEM].nunique() if COL_SE_ORIGEM in df_ldat_2.columns else 0
+if COL_COMP in df_ldat_2.columns:
+    ext_km = pd.to_numeric(df_ldat_2[COL_COMP], errors="coerce").sum() / 1000.0
+else:
+    ext_km = 0.0
+
+k1, k2, k3, k4 = st.columns(4)
+k1.metric("Estruturas", f"{qtd_estruturas:,}".replace(",", "."))
+k2.metric("Extensão total (km)", f"{ext_km:,.1f}".replace(",", "X").replace(".", ",").replace("X", "."))
+k3.metric("LDAT (nº)", f"{qtd_ldat:,}".replace(",", "."))
+k4.metric("SE de origem (nº)", f"{qtd_se:,}".replace(",", "."))
+
+# Gráficos
+g1, g2 = st.columns(2)
+with g1:
+    grafico_contagem(df_pont_f, "ALT", "Estruturas por Altura")
+with g2:
+    grafico_contagem(df_pont_f, "ESF", "Estruturas por Esforço")
+
+g3, g4 = st.columns(2)
+with g3:
+    grafico_contagem(df_pont_f, "MAT", "Estruturas por Material")
+with g4:
+    grafico_contagem(df_pont_f, "TIP_PN", "Estruturas por TIP_PN")
+
+grafico_contagem(df_pont_f, "MUN", "Estruturas por Município")
 
 if df_ldat_r.empty and df_pont_r.empty:
     st.info("Nenhuma LDAT/estrutura corresponde aos filtros selecionados.")
