@@ -96,7 +96,30 @@ gdf_pont["tooltip"] = (
     "- TUC: " + gdf_pont["TUC"].astype(str) +
     "\nSituação contábil: " + gdf_pont["SITCONT"].astype(str)
 )
+
+def txt(series):
+    return series.fillna("—").astype(str)      # fillna ANTES do astype
+
 df_pontx = gdf_pont.drop(columns="geometry")
+
+df_pontx["tooltip"] = (
+    txt(df_pont["__layer__"]) +
+    "\nCOD_ID: " + txt(df_pont["COD_ID"]) +
+    "\nLat: " + txt(df_pont["latitude"].round(5)) +
+    "\nLon: " + txt(df_pont["longitude"].round(5)) +
+    "\nTIP_PN: " + txt(df_pont["TIP_PN"]) +
+    "\nProprietário: " + txt(df_pont["POS"]) +
+    "\nMaterial: " + txt(df_pont["MAT"]) +
+    "\nEsforço: " + txt(df_pont["ESF"]) +
+    "\nAltura: " + txt(df_pont["ALT"]) +
+    "\nPerímetro: " + txt(df_pont["ARE_LOC"]) +
+    "\nLocalidade: " + txt(df_pont["MUN"]) +
+    "\nODI: " + txt(df_pont["ODI"]) +
+    " - TI: " + txt(df_pont["TI"]) +
+    " - CM: " + txt(df_pont["CM"]) +
+    "- TUC: " + txt(df_pont["TUC"]) +
+    "\nSituação contábil: " + txt(df_pont["SITCONT"])
+).fillna("Sem dados")
 
 tg_ldat = st.sidebar.toggle("Traçado LDAT", value=False)
 tg_estrut = st.sidebar.toggle("Estruturas", value=False)
