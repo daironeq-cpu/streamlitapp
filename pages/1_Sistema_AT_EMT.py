@@ -15,8 +15,9 @@ COL_SE_ORIGEM = "DESCR"
 COL_LDAT_NOME = "CT_COD_OP"
 COLS_CONEXAO_LDAT = ["PN_CON_1", "PN_CON_2"]
 COL_ID_PONT = "COD_ID"
-COL_COMP = "COMP"                              # comprimento do vão (m) na LDAT
-COLS_PONT_BI = ["TIP_PN", "MAT", "ALT", "ESF", "MUN"]  # atributos para os gráficos
+COL_COMP = "COMP"                       # comprimento do vão (m) na LDAT
+COL_TIPO_CABO = "BIT_FAS_1"            # tipo de cabo: BIT_FAS_1 | MAT_FAS_1 | GEOM_CAB
+COLS_PONT_BI = ["ALT", "ESF", "MAT"]  # atributos usados nos gráficos
 
 
 def extract_coords(geom):
@@ -49,6 +50,10 @@ def aplicar(df, col, sel):
     return df
 
 
+def fmt_sel(sel):
+    return ", ".join(sel) if sel else "Todas"
+
+
 def grafico_contagem(df, col, titulo):
     """Barra com a contagem de estruturas por valor de `col`."""
     if col not in df.columns or df.empty or df[col].dropna().empty:
@@ -64,6 +69,27 @@ def grafico_contagem(df, col, titulo):
     cont[col] = cont[col].astype(str)
     fig = px.bar(cont, x=col, y="Quantidade", title=titulo, text="Quantidade")
     fig.update_traces(textposition="outside")
+    fig.update_layout(margin=dict(l=10, r=10, t=45, b=10), height=340, xaxis_title="", yaxis_title="")
+    st.plotly_chart(fig, use_container_width=True)
+
+
+def grafico_extensao(df, col, comp_col, titulo):
+    """Barra com a extensão total (km) somando `comp_col` por valor de `col`."""
+    if col not in df.columns or comp_col not in df.columns or df.empty:
+        st.info(f"Sem dados para: {titulo}")
+        return
+    tmp = df[[col, comp_col]].copy()
+    tmp[comp_col] = pd.to_numeric(tmp[comp_col], errors="coerce")
+    tmp = tmp.dropna(subset=[comp_col])
+    if tmp.empty:
+        st.info(f"Sem dados para: {titulo}")
+        return
+    agg = tmp.groupby(col, dropna=True)[comp_col].sum().div(1000.0).reset_index()
+    agg.columns = [col, "Extensão (km)"]
+    agg[col] = agg[col].astype(str)
+    agg = agg.sort_values("Extensão (km)", ascending=False)
+    fig = px.bar(agg, x=col, y="Extensão (km)", title=titulo, text="Extensão (km)")
+    fig.update_traces(texttemplate="%{text:.1f}", textposition="outside")
     fig.update_layout(margin=dict(l=10, r=10, t=45, b=10), height=340, xaxis_title="", yaxis_title="")
     st.plotly_chart(fig, use_container_width=True)
 
@@ -146,7 +172,7 @@ def preparar_dados(path_se, path_ldat, path_est, path_pont):
     df_se  = pd.DataFrame(gdf_se[["coords", "tooltip"]])
     df_est = pd.DataFrame(gdf_est[["coords", "tooltip"]])
 
-    keep_ldat = ["coords", "tooltip"] + [c for c in ([COL_LDAT_NOME, COL_SE_ORIGEM, COL_COMP] + COLS_CONEXAO_LDAT) if c in gdf_ldat.columns]
+    keep_ldat = ["coords", "tooltip"] + [c for c in ([COL_LDAT_NOME, COL_SE_ORIGEM, COL_COMP, COL_TIPO_CABO] + COLS_CONEXAO_LDAT) if c in gdf_ldat.columns]
     df_ldat = pd.DataFrame(gdf_ldat[keep_ldat])
 
     keep_pont = ["longitude", "latitude", "tooltip", COL_ID_PONT] + [c for c in COLS_PONT_BI if c in gdf_pont.columns]
@@ -247,7 +273,9 @@ except Exception as e:
 
 # ------------------- PAINEL B.I. (reflete os filtros) -------------------
 st.divider()
-st.markdown("## 📊 Painel (B.I.)")
+
+# Nomes selecionados
+st.markdown(f"**SE de origem:** {fmt_sel(sel_se)}  |  **Nome da LDAT:** {fmt_sel(sel_ldat)}")
 
 # KPIs
 qtd_estruturas = len(df_pont_f)
@@ -273,11 +301,9 @@ with g2:
 
 g3, g4 = st.columns(2)
 with g3:
-    grafico_contagem(df_pont_f, "MAT", "Estruturas por Material")
+    grafico_extensao(df_ldat_2, COL_TIPO_CABO, COL_COMP, "Extensão por Tipo de Cabo (km)")
 with g4:
-    grafico_contagem(df_pont_f, "TIP_PN", "Estruturas por TIP_PN")
-
-grafico_contagem(df_pont_f, "MUN", "Estruturas por Município")
+    grafico_contagem(df_pont_f, "MAT", "Estruturas por Material")
 
 if df_ldat_r.empty and df_pont_r.empty:
     st.info("Nenhuma LDAT/estrutura corresponde aos filtros selecionados.")
