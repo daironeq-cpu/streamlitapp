@@ -66,6 +66,8 @@ def preparar_dados(path_se, path_ldat, path_est, path_pont):
         "\nNome:" + txt(gdf_se["NOME"])
     ).fillna("Sem dados")
 
+    gdf_est["tooltip"] = ("Camada: " + txt(gdf_est["__layer__"])).fillna("Sem dados")
+
     gdf_pont["tooltip"] = (
         txt(gdf_pont["__layer__"]) +
         "\nCOD_ID: " + txt(gdf_pont["COD_ID"]) +
