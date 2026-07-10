@@ -50,10 +50,6 @@ def aplicar(df, col, sel):
     return df
 
 
-def fmt_sel(sel):
-    return ", ".join(sel) if sel else "Todas"
-
-
 def grafico_contagem(df, col, titulo):
     """Barra com a contagem de estruturas por valor de `col`."""
     if col not in df.columns or df.empty or df[col].dropna().empty:
@@ -273,9 +269,6 @@ except Exception as e:
 
 # ------------------- PAINEL B.I. (reflete os filtros) -------------------
 st.divider()
-
-# Nomes selecionados
-st.markdown(f"**SE de origem:** {fmt_sel(sel_se)}  |  **Nome da LDAT:** {fmt_sel(sel_ldat)}")
 
 # KPIs
 qtd_estruturas = len(df_pont_f)
