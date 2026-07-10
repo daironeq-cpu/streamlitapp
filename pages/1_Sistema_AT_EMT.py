@@ -112,7 +112,7 @@ if "layers" not in st.session_state:
         get_polygon="coords",
         get_fill_color=[255, 140, 0, 10],
         get_line_color=[180, 90, 0, 200],
-        get_line_width=5,
+        get_line_width=1,
         line_width_units="pixels",
         line_width_min_pixels=1,
         stroked=True,
@@ -128,7 +128,8 @@ if "layers" not in st.session_state:
         get_polygon="coords",
         get_fill_color=[255, 255, 0, 255],
         get_line_color=[255, 255, 0, 255],
-        get_line_width=3,
+        get_line_width=1,
+        line_width_max_pixels=2,
         line_width_units="pixels",
         line_width_min_pixels=1,
         stroked=True,
@@ -141,9 +142,10 @@ if "layers" not in st.session_state:
         data=gdf_ldat,
         get_path="coords",
         get_color=[0, 90, 255, 220],
-        get_width=3,
+        get_width=1,
         width_units="pixels",
-        width_min_pixels=2,
+        width_min_pixels=1,
+        width_max_pixels=2,
         pickable=True,
         auto_highlight=True,
         visible=tg_ldat
@@ -152,8 +154,9 @@ if "layers" not in st.session_state:
         "ScatterplotLayer",
         data=gdf_pont,                               # pode ser GeoDataFrame direto
         get_position='[longitude, latitude]',   # usa as colunas que você criou
-        get_radius=10,
-        radius_min_pixels=2,                         # metros (se usar 'meters' como units)
+        get_radius=2,
+        radius_min_pixels=1,                         # metros (se usar 'meters' como units)
+        radius_max_pixels=4,
         radius_units="pixels",                  # ou "meters"
         get_color='[255, 80, 0, 180]',
         pickable=True,
