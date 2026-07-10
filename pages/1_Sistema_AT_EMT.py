@@ -17,7 +17,12 @@ COLS_CONEXAO_LDAT = ["PN_CON_1", "PN_CON_2"]
 COL_ID_PONT = "COD_ID"
 COL_COMP = "COMP"                          # comprimento do vão (m) na LDAT
 COL_TIPO_CABO = "BIT_FAS_1"               # tipo de cabo: BIT_FAS_1 | MAT_FAS_1 | GEOM_CAB
-COLS_PONT_BI = ["ALT", "ESF", "MAT", "MUN"]  # atributos usados nos gráficos
+
+# Material do poste e município: "auto" detecta; ou informe o nome exato da coluna
+COL_MATERIAL = "auto"
+COL_MUNICIPIO = "auto"
+CAND_MATERIAL = ["MAT", "MATERIAL", "MAT_EST", "MAT_PN", "COD_MAT", "TIP_EST", "TIPO_EST", "TUC", "UC"]
+CAND_MUNICIPIO = ["MUN", "MUNICIPIO", "MUNICÍPIO", "COD_MUN", "MUNIC", "NOM_MUN", "NM_MUN", "CIDADE", "LOCALIDADE"]
 
 
 def extract_coords(geom):
@@ -32,6 +37,19 @@ def extract_coords(geom):
 
 def txt(series):
     return series.fillna("—").astype(str)
+
+
+def escolher_coluna(gdf, escolha, candidatas):
+    """Usa a coluna informada; se 'auto', escolhe entre as candidatas a mais preenchida."""
+    if escolha != "auto" and escolha in gdf.columns:
+        return escolha
+    melhor, melhor_preench = None, 0
+    for c in candidatas:
+        if c in gdf.columns:
+            preench = int(gdf[c].notna().sum())
+            if preench > melhor_preench:
+                melhor, melhor_preench = c, preench
+    return melhor
 
 
 def opcoes(df, col):
@@ -50,13 +68,15 @@ def aplicar(df, col, sel):
     return df
 
 
-def grafico_contagem(df, col, titulo):
+def grafico_contagem(df, col, titulo, top_n=None):
     """Barra com a contagem de estruturas por valor de `col`."""
-    if col not in df.columns or df.empty or df[col].dropna().empty:
+    if col is None or col not in df.columns or df.empty or df[col].dropna().empty:
         st.info(f"Sem dados para: {titulo}")
         return
     cont = df[col].dropna().value_counts().reset_index()
     cont.columns = [col, "Quantidade"]
+    if top_n:
+        cont = cont.nlargest(top_n, "Quantidade")
     try:  # ordena numericamente quando possível (altura/esforço)
         cont["_ord"] = pd.to_numeric(cont[col])
         cont = cont.sort_values("_ord").drop(columns="_ord")
@@ -113,6 +133,14 @@ def preparar_dados(path_se, path_ldat, path_est, path_pont):
     gdf_pont["longitude"] = gdf_pont.geometry.x
     gdf_pont["latitude"] = gdf_pont.geometry.y
     gdf_pont = gdf_pont.dropna(subset=["longitude", "latitude"]).copy()
+
+    # detecta colunas de material e município
+    col_mat = escolher_coluna(gdf_pont, COL_MATERIAL, CAND_MATERIAL)
+    col_mun = escolher_coluna(gdf_pont, COL_MUNICIPIO, CAND_MUNICIPIO)
+    if col_mat:
+        gdf_pont["MATERIAL_BI"] = gdf_pont[col_mat]
+    if col_mun:
+        gdf_pont["MUN_BI"] = gdf_pont[col_mun]
 
     gdf_se["__layer__"]   = "Subestação"
     gdf_ldat["__layer__"] = "Linha de Distribuição de Alta Tensão(LDAT)"
@@ -171,13 +199,14 @@ def preparar_dados(path_se, path_ldat, path_est, path_pont):
     keep_ldat = ["coords", "tooltip"] + [c for c in ([COL_LDAT_NOME, COL_SE_ORIGEM, COL_COMP, COL_TIPO_CABO] + COLS_CONEXAO_LDAT) if c in gdf_ldat.columns]
     df_ldat = pd.DataFrame(gdf_ldat[keep_ldat])
 
-    keep_pont = ["longitude", "latitude", "tooltip", COL_ID_PONT] + [c for c in COLS_PONT_BI if c in gdf_pont.columns]
+    keep_pont = ["longitude", "latitude", "tooltip", COL_ID_PONT] + [c for c in ["ALT", "ESF", "MATERIAL_BI", "MUN_BI"] if c in gdf_pont.columns]
     df_pont = pd.DataFrame(gdf_pont[keep_pont])
 
-    return df_se, df_ldat, df_est, df_pont, bounds
+    diag = {"cols_pont": gdf_pont.columns.tolist(), "col_mat": col_mat, "col_mun": col_mun}
+    return df_se, df_ldat, df_est, df_pont, bounds, diag
 
 
-df_se, df_ldat, df_est, df_pont, bounds = preparar_dados(
+df_se, df_ldat, df_est, df_pont, bounds, diag = preparar_dados(
     "SUB.shp", "SSDAT1.shp", "ARAT.shp", "PONNOT.shp"
 )
 
@@ -296,9 +325,15 @@ g3, g4 = st.columns(2)
 with g3:
     grafico_extensao(df_ldat_2, COL_TIPO_CABO, COL_COMP, "Extensão por Tipo de Cabo (km)")
 with g4:
-    grafico_contagem(df_pont_f, "MAT", "Estruturas por Material")
+    grafico_contagem(df_pont_f, "MATERIAL_BI", "Estruturas por Material")
 
-grafico_contagem(df_pont_f, "MUN", "Estruturas por Município")
+grafico_contagem(df_pont_f, "MUN_BI", "Estruturas por Município", top_n=20)
+
+# ------------------- DIAGNÓSTICO (para acertar as colunas) -------------------
+with st.expander("🔧 Diagnóstico de colunas (estruturas)"):
+    st.write("Coluna de **material** usada:", diag["col_mat"])
+    st.write("Coluna de **município** usada:", diag["col_mun"])
+    st.write("Todas as colunas do PONNOT:", diag["cols_pont"])
 
 if df_ldat_r.empty and df_pont_r.empty:
     st.info("Nenhuma LDAT/estrutura corresponde aos filtros selecionados.")
