@@ -10,11 +10,11 @@ pdk.settings.mapbox_api_key = os.environ["MAPBOX_API_KEY"]
 st.set_page_config(page_title="SISTEMA AT EMT", layout="wide")
 
 # Colunas usadas nos filtros (ajuste se necessário)
-COL_SE_ORIGEM = "DESCR"                          # SE de origem (na LDAT)
-COL_LDAT_NOME = "CT_COD_OP"                       # Nome da LDAT
-COLS_CONEXAO_LDAT = ["PN_CON_1", "PN_CON_2"]      # ligam a LDAT ao COD_ID da estrutura
-COL_ID_PONT = "COD_ID"                            # id da estrutura
-COLS_PONT_CASCATA = ["TIP_PN", "MAT", "ALT", "ESF"]  # cascata nas estruturas
+COL_SE_ORIGEM = "DESCR"
+COL_LDAT_NOME = "CT_COD_OP"
+COLS_CONEXAO_LDAT = ["PN_CON_1", "PN_CON_2"]
+COL_ID_PONT = "COD_ID"
+COLS_PONT_CASCATA = ["TIP_PN", "MAT", "ALT", "ESF"]
 
 
 def extract_coords(geom):
@@ -126,10 +126,7 @@ df_se, df_ldat, df_est, df_pont, bounds = preparar_dados(
     "SUB.shp", "SSDAT1.shp", "ARAT.shp", "PONNOT.shp"
 )
 
-# ------------------- CONTROLES (barra lateral) -------------------
-tg_ldat = st.sidebar.toggle("Traçado LDAT", value=False)
-tg_estrut = st.sidebar.toggle("Estruturas", value=False)
-tg_se = st.sidebar.toggle("Subestações", value=False)
+# ------------------- CONTROLE (barra lateral) -------------------
 select_map = st.sidebar.selectbox("Estilo de mapa", [
     "Dark_C", "Satellite_Streets", "Streets", "Outdoors",
     "Dark_M", "Light", "Satellite", "Navigation_Day", "Navigation_Night"
@@ -149,7 +146,6 @@ with c2:
     sel_ldat = st.multiselect("Nome da LDAT", opcoes(df_ldat_1, COL_LDAT_NOME))
 df_ldat_2 = aplicar(df_ldat_1, COL_LDAT_NOME, sel_ldat)
 
-# estruturas vinculadas às LDAT já filtradas
 cols_ok = [c for c in COLS_CONEXAO_LDAT if c in df_ldat_2.columns]
 if cols_ok:
     ids_estruturas = pd.unique(df_ldat_2[cols_ok].astype(str).values.ravel())
@@ -174,33 +170,32 @@ with c6:
     sel_esf = st.multiselect("Esforço", opcoes(df_pont_4, "ESF"))
 df_pont_5 = aplicar(df_pont_4, "ESF", sel_esf)
 
-# dados finais para renderizar
 df_ldat_r = df_ldat_2[["coords", "tooltip"]]
 df_pont_r = df_pont_5[["longitude", "latitude", "tooltip"]]
 
-# ------------------- CAMADAS -------------------
+# ------------------- CAMADAS (sempre visíveis; filtros controlam o conteúdo) -------------------
 layers = [
     pdk.Layer(
         "PolygonLayer", data=df_se, get_polygon="coords",
         get_fill_color=[255, 140, 0, 10], get_line_color=[180, 90, 0, 200],
         get_line_width=1, line_width_units="pixels", line_width_min_pixels=1, line_width_max_pixels=2,
-        stroked=True, filled=True, pickable=True, auto_highlight=True, extruded=False, visible=tg_se
+        stroked=True, filled=True, pickable=True, auto_highlight=True, extruded=False, visible=True
     ),
     pdk.Layer(
         "PolygonLayer", data=df_est, get_polygon="coords",
         get_fill_color=[255, 255, 0, 255], get_line_color=[255, 255, 0, 255],
         get_line_width=1, line_width_units="pixels", line_width_min_pixels=1, line_width_max_pixels=2,
-        stroked=True, filled=False, pickable=True, extruded=False
+        stroked=True, filled=False, pickable=True, extruded=False, visible=True
     ),
     pdk.Layer(
         "PathLayer", data=df_ldat_r, get_path="coords", get_color=[0, 90, 255, 220],
         get_width=1, width_units="pixels", width_min_pixels=1, width_max_pixels=2,
-        pickable=True, auto_highlight=True, visible=tg_ldat
+        pickable=True, auto_highlight=True, visible=True
     ),
     pdk.Layer(
         "ScatterplotLayer", data=df_pont_r, get_position='[longitude, latitude]',
         get_radius=2, radius_min_pixels=1, radius_max_pixels=4, radius_units="pixels",
-        get_color='[255, 80, 0, 180]', pickable=True, auto_highlight=True, visible=tg_estrut
+        get_color='[255, 80, 0, 180]', pickable=True, auto_highlight=True, visible=True
     ),
 ]
 
