@@ -14,7 +14,6 @@ COL_SE_ORIGEM = "DESCR"
 COL_LDAT_NOME = "CT_COD_OP"
 COLS_CONEXAO_LDAT = ["PN_CON_1", "PN_CON_2"]
 COL_ID_PONT = "COD_ID"
-COLS_PONT_CASCATA = ["TIP_PN", "MAT", "ALT", "ESF"]
 
 
 def extract_coords(geom):
@@ -54,7 +53,6 @@ def preparar_dados(path_se, path_ldat, path_est, path_pont):
     gdf_est = gpd.read_file(path_est).to_crs(epsg=4326)
     gdf_pont = gpd.read_file(path_pont).to_crs(epsg=4326)
 
-    # remove geometrias nulas/vazias (fonte dos NaN que derrubam o deck.gl)
     gdf_se = gdf_se[gdf_se.geometry.notna() & ~gdf_se.geometry.is_empty].copy()
     gdf_ldat = gdf_ldat[gdf_ldat.geometry.notna() & ~gdf_ldat.geometry.is_empty].copy()
     gdf_est = gdf_est[gdf_est.geometry.notna() & ~gdf_est.geometry.is_empty].copy()
@@ -64,7 +62,6 @@ def preparar_dados(path_se, path_ldat, path_est, path_pont):
     gdf_ldat["coords"] = gdf_ldat.geometry.apply(extract_coords)
     gdf_est["coords"] = gdf_est.geometry.apply(extract_coords)
 
-    # descarta o que não virou coords válido
     gdf_se = gdf_se[gdf_se["coords"].notna()].copy()
     gdf_ldat = gdf_ldat[gdf_ldat["coords"].notna()].copy()
     gdf_est = gdf_est[gdf_est["coords"].notna()].copy()
@@ -130,8 +127,7 @@ def preparar_dados(path_se, path_ldat, path_est, path_pont):
     keep_ldat = ["coords", "tooltip"] + [c for c in ([COL_LDAT_NOME, COL_SE_ORIGEM] + COLS_CONEXAO_LDAT) if c in gdf_ldat.columns]
     df_ldat = pd.DataFrame(gdf_ldat[keep_ldat])
 
-    keep_pont = ["longitude", "latitude", "tooltip", COL_ID_PONT] + [c for c in COLS_PONT_CASCATA if c in gdf_pont.columns]
-    df_pont = pd.DataFrame(gdf_pont[keep_pont])
+    df_pont = pd.DataFrame(gdf_pont[["longitude", "latitude", "tooltip", COL_ID_PONT]])
 
     return df_se, df_ldat, df_est, df_pont, bounds
 
@@ -150,8 +146,8 @@ select_map = st.sidebar.selectbox("Estilo de mapa", [
 st.markdown("### 🗺️ **Sistema de Alta Tensão - Energisa Mato Grosso**\n")
 st.markdown("###### ⚙️ *BASE DE DADOS GEOGRÁFICA DA DISTRIBUIDORA – BDGD*\n")
 
-# ------------------- FILTRO EM CASCATA -------------------
-c1, c2, c3 = st.columns(3)
+# ------------------- FILTROS (SE de origem -> Nome da LDAT) -------------------
+c1, c2 = st.columns(2)
 with c1:
     sel_se = st.multiselect("SE de origem", opcoes(df_ldat, COL_SE_ORIGEM))
 df_ldat_1 = aplicar(df_ldat, COL_SE_ORIGEM, sel_se)
@@ -160,33 +156,16 @@ with c2:
     sel_ldat = st.multiselect("Nome da LDAT", opcoes(df_ldat_1, COL_LDAT_NOME))
 df_ldat_2 = aplicar(df_ldat_1, COL_LDAT_NOME, sel_ldat)
 
+# estruturas vinculadas às LDAT filtradas
 cols_ok = [c for c in COLS_CONEXAO_LDAT if c in df_ldat_2.columns]
 if cols_ok:
     ids_estruturas = pd.unique(df_ldat_2[cols_ok].astype(str).values.ravel())
-    df_pont_1 = df_pont[df_pont[COL_ID_PONT].astype(str).isin(ids_estruturas)]
+    df_pont_f = df_pont[df_pont[COL_ID_PONT].astype(str).isin(ids_estruturas)]
 else:
-    df_pont_1 = df_pont
+    df_pont_f = df_pont
 
-with c3:
-    sel_tip = st.multiselect("TIP_PN", opcoes(df_pont_1, "TIP_PN"))
-df_pont_2 = aplicar(df_pont_1, "TIP_PN", sel_tip)
-
-c4, c5, c6 = st.columns(3)
-with c4:
-    sel_mat = st.multiselect("Material", opcoes(df_pont_2, "MAT"))
-df_pont_3 = aplicar(df_pont_2, "MAT", sel_mat)
-
-with c5:
-    sel_alt = st.multiselect("Altura", opcoes(df_pont_3, "ALT"))
-df_pont_4 = aplicar(df_pont_3, "ALT", sel_alt)
-
-with c6:
-    sel_esf = st.multiselect("Esforço", opcoes(df_pont_4, "ESF"))
-df_pont_5 = aplicar(df_pont_4, "ESF", sel_esf)
-
-# dados finais saneados (sem NaN de coordenada)
 df_ldat_r = df_ldat_2[["coords", "tooltip"]]
-df_pont_r = df_pont_5[["longitude", "latitude", "tooltip"]].dropna(subset=["longitude", "latitude"])
+df_pont_r = df_pont_f[["longitude", "latitude", "tooltip"]].dropna(subset=["longitude", "latitude"])
 
 # ------------------- CAMADAS -------------------
 layers = [
