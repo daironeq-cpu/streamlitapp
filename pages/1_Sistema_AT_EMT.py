@@ -96,7 +96,7 @@ gdf_pont["tooltip"] = (
     "- TUC: " + gdf_pont["TUC"].astype(str) +
     "\nSituação contábil: " + gdf_pont["SITCONT"].astype(str)
 )
-df_pont = gdf_pont.drop(columns="geometry")
+#df_pont = gdf_pont.drop(columns="geometry")
 
 tg_ldat = st.sidebar.toggle("Traçado LDAT", value=False)
 tg_estrut = st.sidebar.toggle("Estruturas", value=False)
@@ -153,7 +153,7 @@ if "layers" not in st.session_state:
     ),
     "path_layer_pont": pdk.Layer(
         "ScatterplotLayer",
-        data=df_pont,                               # pode ser GeoDataFrame direto
+        data=gdf_pont,                               # pode ser GeoDataFrame direto
         get_position='[longitude, latitude]',   # usa as colunas que você criou
         get_radius=2,
         radius_min_pixels=1,                         # metros (se usar 'meters' como units)
